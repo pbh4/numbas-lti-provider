@@ -1,3 +1,8 @@
+#pbh4
+from __future__ import division
+import re
+#
+
 from django.contrib.staticfiles.templatetags.staticfiles import static
 from django.shortcuts import redirect
 from django_auth_lti.patch_reverse import reverse
@@ -15,7 +20,11 @@ def get_config_url(request):
 def request_is_instructor(request):
     if request.user.is_superuser:
         return True
-    return 'Instructor' in request.LTI.get('roles')
+#    return 'Instructor' in request.LTI.get('roles')
+# pbh: Bb uses lowercase!
+    for role in request.LTI.get('roles'):
+        if re.match("(.*)(I|i)nstructor(.*)", role):
+            return True;
 
 def static_view(template_name):
     return generic.TemplateView.as_view(template_name=template_name)
