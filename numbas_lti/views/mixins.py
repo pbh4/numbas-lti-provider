@@ -37,7 +37,7 @@ class LTIRoleOrSuperuserMixin(LTIRoleRestrictionMixin):
             return super(LTIRoleOrSuperuserMixin, self).check_allowed(request)
 
 class MustBeInstructorMixin(LTIRoleOrSuperuserMixin):
-    allowed_roles = ['Instructor']
+    allowed_roles = ['Instructor','urn:lti:role:ims/lis/Instructor']
 
 class ManagementViewMixin(object):
     def get_context_data(self,*args,**kwargs):
