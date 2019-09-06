@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Min
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 import requests
@@ -40,6 +41,53 @@ class LTIConsumer(models.Model):
     @property
     def resources(self):
         return Resource.objects.filter(context__consumer=self)
+
+    def contexts_grouped_by_period(self):
+        contexts = self.contexts.exclude(name='').annotate(creation=Min('resources__creation_time')).order_by('-creation')
+        if not self.time_periods.exists():
+            return [(None,contexts)]
+        it = iter(self.time_periods.order_by('-end'))
+        p = next(it)
+        out = []
+        lafter = []
+        lduring = []
+        for c in contexts.exclude(creation=None):
+            while p is not None and c.creation<p.start:
+                if len(lafter):
+                    out.append((None,lafter))
+                if len(lduring):
+                    out.append((p,lduring))
+                lafter = []
+                lduring = []
+                try:
+                    p = next(it)
+                except StopIteration:
+                    p = None
+            if p is None:
+                lafter.append(c)
+                continue
+            if c.creation>p.end:
+                lafter.append(c)
+            else:
+                lduring.append(c)
+        if len(lafter):
+            out.append((None,lafter))
+        if len(lduring):
+            out.append((p,lduring))
+        no_creation = contexts.filter(creation=None)
+        if no_creation.exists():
+            out.append((None,no_creation[:]))
+        groups = [(p,sorted(cs,key=lambda c:c.name.upper())) for p,cs in out]
+        return groups
+
+class ConsumerTimePeriod(models.Model):
+    consumer = models.ForeignKey(LTIConsumer, related_name='time_periods', on_delete=models.CASCADE)
+    start = models.DateTimeField()
+    end = models.DateTimeField()
+    name = models.CharField(max_length=300)
+
+    class Meta:
+        ordering = ['-end','-start']
 
 class ExtractPackageMixin(object):
     extract_folder = 'extracted_zips'
@@ -129,6 +177,7 @@ class Resource(models.Model):
     grading_method = models.CharField(max_length=20,choices=GRADING_METHODS,default='highest',verbose_name=_('Grading method'))
     include_incomplete_attempts = models.BooleanField(default=True,verbose_name=_('Include incomplete attempts in grading?'))
     show_marks_when = models.CharField(max_length=20, default='always', choices=SHOW_SCORES_MODES, verbose_name=_('When to show scores to students'))
+    allow_review_from = models.DateTimeField(blank=True, null=True, verbose_name=_('Allow students to review attempts from'))
     report_mark_time = models.CharField(max_length=20,choices=REPORT_TIMES,default='immediately',verbose_name=_('When to report scores back'))
 
     max_attempts = models.PositiveIntegerField(default=0,verbose_name=_('Maximum attempts per user'))
@@ -169,7 +218,7 @@ class Resource(models.Model):
         return attempts.aggregate(highest_score=models.Max('scaled_score'))['highest_score']
 
     def grade_last(self,user,attempts):
-        return attempts.order_by('-start_time').first()
+        return attempts.order_by('-start_time').first().scaled_score
 
     def students(self):
         return User.objects.filter(attempts__resource=self).distinct().order_by('last_name','first_name')
@@ -284,6 +333,8 @@ class Attempt(models.Model):
         try:
             return self.scormelements.current(key).value
         except ScormElement.DoesNotExist:
+            if callable(default):
+                default = default()
             return default
 
     def completed(self):
@@ -307,7 +358,7 @@ class Attempt(models.Model):
                 total += self.question_max_score(i)
             return total
 
-        return float(self.get_element_default('cmi.score.max',sum(self.question_max_score(i) for i in range(self.resource.num_questions))))
+        return float(self.get_element_default('cmi.score.max', lambda: sum(self.question_max_score(i) for i in range(self.resource.num_questions))))
 
     def part_discount(self,part):
         return self.resource.discounted_parts.filter(part=part).first()
@@ -341,8 +392,8 @@ class Attempt(models.Model):
         return out
 
     def part_gaps(self,part):
-        if not re.match(r'q\d+p\d+$',part):
-            return None
+        if not re.match(r'^q\d+p\d+$',part):
+            return []
         gaps = [g for g in self.part_paths() if g.startswith(part+'g')]
         return gaps
 
@@ -449,6 +500,17 @@ class Attempt(models.Model):
     def channels_group(self):
         return 'attempt-{}'.format(self.pk)
 
+    def resume_allowed(self):
+        if self.completed():
+            return self.review_allowed()
+        else:
+            return True
+
+    def review_allowed(self):
+        if not self.should_show_scores():
+            return False
+        return self.resource.allow_review_from is None or timezone.now() >= self.resource.allow_review_from
+
     def should_show_scores(self):
         return self.resource.show_marks_when=='always' or (self.resource.show_marks_when=='complete' and self.completed())
 
@@ -476,7 +538,7 @@ class RemarkPart(models.Model):
 
 def remark_update_scaled_score(sender,instance,**kwargs):
     attempt = instance.attempt
-    question = int(re.match(r'^q(\d+)p\d+$',instance.part).group(1))
+    question = int(re.match(r'^q(\d+)',instance.part).group(1))
     attempt.update_question_score_info(question)
     if attempt.max_score>0:
         scaled_score = attempt.raw_score/attempt.max_score
@@ -500,7 +562,7 @@ class DiscountPart(models.Model):
 
 def discount_update_scaled_score(sender,instance,**kwargs):
     for attempt in instance.resource.attempts.all():
-        question = int(re.match(r'^q(\d+)p\d+$',instance.part).group(1))
+        question = int(re.match(r'^q(\d+)',instance.part).group(1))
         attempt.update_question_score_info(question)
 
         scaled_score = attempt.raw_score/attempt.max_score
@@ -666,6 +728,9 @@ def update_editor_cache_before_save(sender,instance,**kwargs):
 
 class StressTest(models.Model):
     resource = models.OneToOneField(Resource,on_delete=models.CASCADE,primary_key=True)
+
+    class Meta:
+        ordering = ['-resource__creation_time']
 
     def __str__(self):
         return self.resource.creation_time.strftime('%B %d, %Y %H:%M')

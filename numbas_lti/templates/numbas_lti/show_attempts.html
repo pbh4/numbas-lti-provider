@@ -12,6 +12,12 @@
         {% blocktrans count num_attempts=object_list|length %}You can resume or review your previous attempt{% plural %}You can resume or review your previous attempts{% endblocktrans %}{% if can_start_new_attempt %}{% trans ", or start a new one" %}{% endif %}.
     </p>
 
+    {% for message in messages %}
+    <div class="alert alert-info">
+        {{message}}
+    </div>
+    {% endfor %}
+
     <table class="table">
         <thead>
             <tr>
@@ -37,15 +43,23 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a class="btn {% if attempt.completed %}btn-link{% else %}btn-primary{% endif %}" href="{% url 'run_attempt' pk=attempt.pk %}">
-                        {% if attempt.completed %}
-                            {% if attempt.should_show_scores %}
+                    {% if attempt.completed %}
+                        {% if attempt.review_allowed %}
+                        <a class="btn btn-info" href="{% url 'run_attempt' pk=attempt.pk %}">
                             <span class="glyphicon glyphicon-apple"></span> {% trans "Review this attempt" %}
-                            {% endif %}
+                        </a>
                         {% else %}
-                            <span class="glyphicon glyphicon-play"></span> {% trans "Continue" %}
+                        {% if attempt.resource.allow_review_from %}
+                            {% blocktrans with time=attempt.resource.allow_review_from %}Review will be available from {{time}}{% endblocktrans %}
                         {% endif %}
-                    </a>
+                        {% endif %}
+                    {% else %}
+                        {% if attempt.resume_allowed %}
+                        <a class="btn {% if attempt.completed %}btn-info{% else %}btn-primary{% endif %}" href="{% url 'run_attempt' pk=attempt.pk %}">
+                            <span class="glyphicon glyphicon-play"></span> {% trans "Continue" %}
+                        </a>
+                        {% endif %}
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

@@ -1,4 +1,4 @@
-from .mixins import ResourceManagementViewMixin, MustBeInstructorMixin, MustHaveExamMixin
+from .mixins import ResourceManagementViewMixin, MustBeInstructorMixin, MustHaveExamMixin, INSTRUCTOR_ROLES, lti_role_or_superuser_required
 from .generic import CSVView
 from numbas_lti import forms
 from numbas_lti.models import Resource, AccessToken, Exam, Attempt, ReportProcess, DiscountPart, EditorLink, COMPLETION_STATUSES
@@ -77,6 +77,18 @@ class DashboardView(MustHaveExamMixin,ResourceManagementViewMixin,MustBeInstruct
         if last_report_process and (not last_report_process.dismissed):
             context['last_report_process'] = last_report_process
 
+        return context
+
+class StudentProgressView(MustHaveExamMixin,ResourceManagementViewMixin,MustBeInstructorMixin,generic.detail.DetailView):
+    model = Resource
+    template_name = 'numbas_lti/management/student_progress.html'
+    management_tab = 'dashboard'
+
+    def get_context_data(self,*args,**kwargs):
+        context = super().get_context_data(*args,**kwargs)
+
+        resource = self.get_object()
+
         context['unlimited_attempts'] = resource.max_attempts == 0
 
         context['student_summary'] = [
@@ -91,6 +103,7 @@ class DashboardView(MustHaveExamMixin,ResourceManagementViewMixin,MustBeInstruct
         ]
 
         return context
+
 
 def hierarchy_key(x):
     key = x[0]
@@ -218,7 +231,7 @@ class AttemptsCSV(MustBeInstructorMixin,CSVView,generic.detail.DetailView):
         resource = self.object
         num_questions = resource.num_questions
 
-        headers = [_(x) for x in ['First name','Last name','Email','Username','Start time','Completed?','Total score','Percentage']]+[_('Question {n}').format(n=i+1) for i in range(num_questions)]
+        headers = [_(x) for x in ['First name','Last name','Email','Username','Start time','End time','Completed?','Total score','Percentage']]+[_('Question {n}').format(n=i+1) for i in range(num_questions)]
         yield headers
 
         for attempt in resource.attempts.all():
@@ -229,6 +242,7 @@ class AttemptsCSV(MustBeInstructorMixin,CSVView,generic.detail.DetailView):
                 attempt.user.email,
                 attempt.user.username,
                 attempt.start_time,
+                attempt.end_time,
                 attempt.completion_status,
                 attempt.raw_score,
                 attempt.scaled_score*100,
@@ -248,19 +262,21 @@ class ReportAllScoresView(MustHaveExamMixin,MustBeInstructorMixin,ResourceManage
         Channel("report.all_scores").send({'pk':self.get_object().pk})
         return super(ReportAllScoresView,self).get(*args,**kwargs)
 
-@lti_role_required(['Instructor'])
-def grant_access_token(request,user_id):
+@lti_role_or_superuser_required(INSTRUCTOR_ROLES)
+def grant_access_token(request,resource_id,user_id):
+    resource = Resource.objects.get(pk=resource_id)
     user = User.objects.get(id=user_id)
-    AccessToken.objects.create(user=user,resource=request.resource)
+    AccessToken.objects.create(user=user,resource=resource)
 
-    return redirect(reverse('dashboard',args=(request.resource.pk,)))
+    return redirect(reverse('dashboard',args=(resource.pk,)))
 
-@lti_role_required(['Instructor'])
-def remove_access_token(request,user_id):
+@lti_role_or_superuser_required(INSTRUCTOR_ROLES)
+def remove_access_token(request,resource_id,user_id):
+    resource = Resource.objects.get(pk=resource_id)
     user = User.objects.get(id=user_id)
-    AccessToken.objects.filter(user=user,resource=request.resource).first().delete()
+    AccessToken.objects.filter(user=user,resource=resource).first().delete()
 
-    return redirect(reverse('dashboard',args=(request.resource.pk,)))
+    return redirect(reverse('dashboard',args=(resource.pk,)))
 
 class DismissReportProcessView(MustBeInstructorMixin,generic.detail.DetailView):
     model = ReportProcess

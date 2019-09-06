@@ -1,9 +1,10 @@
-Django==2.0
-oauthlib==2.0.7
-lxml==4.2.1
+Django==2.2.2
+oauthlib==3.0.1
+lxml==4.3.0
 channels==1.1.8
 git+https://github.com/christianp/django-auth-lti@oauthlib#egg=django_auth_lti
-requests==2.18.4
-requests-oauthlib==0.8.0
+requests==2.21.0
+requests-oauthlib==1.2.0
 django-bootstrap-form==3.4
-simplejson==3.13.2
+simplejson==3.16.0
+django-bootstrap-datepicker-plus==3.0.5

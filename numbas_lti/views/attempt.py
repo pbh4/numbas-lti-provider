@@ -207,6 +207,9 @@ class ShowAttemptsView(generic.list.ListView):
         return Attempt.objects.filter(resource=self.request.resource,user=self.request.user).exclude(broken=True)
 
     def dispatch(self,request,*args,**kwargs):
+        if request.GET.get('back_from_unsaved_complete_attempt'):
+            messages.add_message(self.request,messages.INFO,_('The attempt was completed, but not all data had been saved. All data has now been saved, and review is not available yet.'))
+
         if not self.get_queryset().exists():
             return new_attempt(request)
         else:
@@ -256,13 +259,13 @@ class RunAttemptView(generic.detail.DetailView):
             broken_attempt.broken = True
             broken_attempt.save()
 
-            context['attempt'] = attempt
             attempt = Attempt.objects.create(
                 resource = broken_attempt.resource,
                 exam = broken_attempt.exam,
                 user = broken_attempt.user
             )
             entry = 'ab-initio'
+            context['attempt'] = attempt
 
 
         if attempt.completion_status=='completed':

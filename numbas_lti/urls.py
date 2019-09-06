@@ -6,7 +6,7 @@ urlpatterns = [
     url(r'^$', views.entry.index, name='index'),
     url(r'^lti_entry$', views.entry.lti_entry, name='lti_entry'),
 
-    url(r'^login$', auth.views.login, name='login'),
+    url(r'^login$', auth.views.LoginView.as_view(), name='login'),
 
     url(r'^create-superuser$', views.admin.CreateSuperuserView.as_view(), name='create_superuser'),
 
@@ -14,6 +14,7 @@ urlpatterns = [
     url(r'^exam/(?P<pk>\d+)/run$', views.resource.RunExamView.as_view(), name='run_exam'),
 
     url(r'^resource/(?P<pk>\d+)$', views.resource.DashboardView.as_view(), name='dashboard'),
+    url(r'^resource/(?P<pk>\d+)/student_progress$', views.resource.StudentProgressView.as_view(), name='student_progress'),
     url(r'^resource/(?P<pk>\d+)/discount_parts$', views.resource.DiscountPartsView.as_view(), name='discount_parts'),
     url(r'^resource/(?P<pk>\d+)/discount_part$', views.resource.DiscountPartView.as_view(), name='discount_part'),
     url(r'^discount_part/(?P<pk>\d+)/update$', views.resource.DiscountPartUpdateView.as_view(), name='discount_part_update'),
@@ -28,15 +29,14 @@ urlpatterns = [
     url(r'^resource/(?P<pk>\d+)/report_scores$', views.resource.ReportAllScoresView.as_view(), name='report_scores'),
     url(r'^resource/(?P<pk>\d+)/scores.csv$', views.resource.ScoresCSV.as_view(), name='scores_csv'),
     url(r'^resource/(?P<pk>\d+)/attempts.csv$', views.resource.AttemptsCSV.as_view(), name='attempts_csv'),
+    url(r'^resource/(?P<resource_id>\d+)/grant_access_token/(?P<user_id>\d+)$', views.resource.grant_access_token, name='grant_access_token'),
+    url(r'^resource/(?P<resource_id>\d+)/remove_access_token/(?P<user_id>\d+)$', views.resource.remove_access_token, name='remove_access_token'),
 
     url(r'^attempt/(?P<pk>\d+)/remark_parts$', views.attempt.RemarkPartsView.as_view(), name='remark_parts'),
     url(r'^attempt/(?P<pk>\d+)/scorm-listing$', views.attempt.AttemptSCORMListing.as_view(), name='attempt_scorm_listing'),
     url(r'^attempt/(?P<pk>\d+)/delete$', views.attempt.DeleteAttemptView.as_view(), name='delete_attempt'),
     url(r'^attempt/(?P<pk>\d+)/reopen$', views.attempt.ReopenAttemptView.as_view(), name='reopen_attempt'),
     url(r'^attempt/(?P<pk>\d+)/scorm_data_fallback$', views.attempt.scorm_data_fallback, name='attempt_scorm_data_fallback'),
-
-    url(r'grant_access_token/(?P<user_id>\d+)$', views.resource.grant_access_token, name='grant_access_token'),
-    url(r'remove_access_token/(?P<user_id>\d+)$', views.resource.remove_access_token, name='remove_access_token'),
 
     url(r'report-process/(?P<pk>\d+)/dismiss$', views.resource.DismissReportProcessView.as_view(), name='dismiss_report_process'),
 
@@ -50,7 +50,10 @@ urlpatterns = [
     url(r'^consumers$', views.consumer.ListConsumersView.as_view(), name='list_consumers'),
     url(r'^consumers/create$', views.consumer.CreateConsumerView.as_view(), name='create_consumer'),
     url(r'^consumers/(?P<pk>\d+)$', views.consumer.ManageConsumerView.as_view(), name='view_consumer'),
+    url(r'^consumers/(?P<pk>\d+)/time-periods$', views.consumer.ManageTimePeriodsView.as_view(), name='consumer_manage_time_periods'),
     url(r'^consumers/(?P<pk>\d+)/delete$', views.consumer.DeleteConsumerView.as_view(), name='delete_consumer'),
+
+    url(r'^time-period/(?P<pk>\d+)/delete$', views.consumer.DeleteTimePeriodView.as_view(), name='delete_consumer_time_period'),
 
     url(r'^contexts/(?P<pk>\d+)$', views.context.ManageContextView.as_view(), name='view_context'),
     url(r'^contexts/(?P<pk>\d+)/delete$', views.context.DeleteContextView.as_view(), name='delete_context'),
